@@ -1,1 +1,373 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Titrasi Lab Kimia</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600&display=swap" rel="stylesheet">
 
+    <style>
+        body {
+            margin: 0; padding: 0; background-color: #1a1a1a;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden; font-family: 'Lexend', sans-serif;
+            user-select: none;
+        }
+        #game-container { 
+            position: relative; width: 100vw; max-width: 100%; 
+            aspect-ratio: 16 / 9; max-height: 100vh; background-color: #000; 
+            margin: auto;
+        }
+        canvas { 
+            width: 100%; height: 100%; display: block; 
+            object-fit: contain; image-rendering: pixelated; 
+            touch-action: none; /* Penting agar layar mobile tidak ikut terscroll saat nge-drag */
+        }
+        
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.85); display: none;
+            flex-direction: column; justify-content: center; align-items: center; gap: 15px; z-index: 10;
+        }
+        
+        .menu-btn {
+            font-family: 'Lexend', sans-serif; font-size: 1.2rem; font-weight: 600;
+            padding: 10px 20px; background-color: #888888; color: white;
+            border: 2px solid #555555; border-radius: 8px; cursor: pointer; width: 250px; text-align: center;
+        }
+        .menu-btn:hover { background-color: #a0a0a0; }
+        .menu-btn:active { transform: scale(0.95); }
+
+        #overfill-popup {
+            position: relative; display: flex; flex-direction: column; align-items: center;
+        }
+        #overfill-img {
+            width: 60%; min-width: 300px; image-rendering: pixelated;
+        }
+        #btn-ulangi {
+            position: absolute; bottom: 12%; width: 45%; height: 25%;
+            opacity: 0; cursor: pointer;
+        }
+        #alert-msg {
+            position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%);
+            background: rgba(255,50,50,0.9); color: white; padding: 5px 15px;
+            border-radius: 5px; font-size: 0.8rem; display: none; pointer-events: none; z-index: 5;
+        }
+        #loading-text {
+            position: absolute; color: white; font-size: 1.5rem; 
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="256" height="144"></canvas>
+        <div id="loading-text">Memuat Aset... 0%</div>
+        <div id="alert-msg">Pesan Notifikasi</div>
+        
+        <div id="menu-overlay" class="overlay">
+            <button class="menu-btn" id="btn-keluar">Keluar</button>
+            <button class="menu-btn" id="btn-lanjut">Lanjutkan Simulasi</button>
+        </div>
+
+        <div id="overfill-overlay" class="overlay">
+            <div id="overfill-popup">
+                <img src="popupg.png" id="overfill-img" alt="Overfill">
+                <button id="btn-ulangi"></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const alertMsg = document.getElementById('alert-msg');
+        const loadingText = document.getElementById('loading-text');
+
+        // --- SISTEM LOAD GAMBAR ---
+        const images = {};
+        const sources = {
+            bg: 'kanvasmeja.png', ui: 'tombolmenu.png', popupg: 'popupg.png',
+            b_closed: 'bit.png', b_open: 'bib.png', b_empty: 'bkb.png',
+            p0: 'pv0.png', p1: 'pv1.png', p2: 'pv2.png', p3: 'pv3.png', p4: 'pv4.png', p5: 'pv5.png',
+            l: 'l.png', la: 'la.png', laa: 'laa.png', laaa: 'laaa.png', laaaa: 'laaaa.png',
+            lb: 'lb.png', lbb: 'lbb.png', lbbb: 'lbbb.png', lbbbb: 'lbbbb.png',
+            lab: 'lab.png', laabb: 'laabb.png',
+            ppb: 'ppb.png', ppp: 'ppp.png', pppb: 'pppb.png'
+        };
+
+        let loadedImages = 0;
+        const totalImages = Object.keys(sources).length;
+
+        for (let key in sources) {
+            images[key] = new Image();
+            images[key].src = sources[key];
+            images[key].onload = () => { 
+                loadedImages++; 
+                loadingText.innerText = `Memuat Aset... ${Math.floor((loadedImages/totalImages)*100)}%`;
+                if (loadedImages === totalImages) {
+                    loadingText.style.display = 'none'; draw(); 
+                }
+            };
+        }
+
+        // --- SISTEM STATE DAN HITBOX (TANPA MENGGENCET GAMBAR) ---
+        // Penjelasan: renderX/Y adalah seberapa jauh kanvas transparan 256x144 digeser. 
+        // hx/hy/hw/hh adalah kotak imajiner yang mendeteksi klik/jari.
+        let bottles, pipettes, flask, indicator;
+
+        function initGame() {
+            bottles = [
+                { id: 'A', renderX: 0, renderY: 0, hx: 42, hy: 80, hw: 35, hh: 55, state: 'closed', capacity: 5 },
+                { id: 'B', renderX: 42, renderY: 0, hx: 42, hy: 80, hw: 35, hh: 55, state: 'closed', capacity: 5 }
+            ];
+
+            flask = { renderX: 0, renderY: 0, hx: 130, hy: 80, hw: 45, hh: 55, a: 0, b: 0, hasIndicator: false };
+
+            indicator = {
+                renderX: 0, renderY: 0, hx: 190, hy: 95, hw: 30, hh: 40,
+                cap_renderX: 0, cap_renderY: 0, cap_hx: 190, cap_hy: 68, cap_hw: 30, cap_hh: 30,
+                isDetached: false, location: 'base'
+            };
+
+            pipettes = [
+                { id: 1, renderX: -10, renderY: 0, base_x: -10, base_y: 0, hx: 20, hy: 15, hw: 22, hh: 120, capacity: 0, tag: 'netral', location: 'rack' },
+                { id: 2, renderX: 12, renderY: 0, base_x: 12, base_y: 0, hx: 20, hy: 15, hw: 22, hh: 120, capacity: 0, tag: 'netral', location: 'rack' }
+            ];
+        }
+
+        initGame();
+
+        let draggedObj = null; 
+        let dragType = null;
+        let dragOffsetX = 0, dragOffsetY = 0;
+
+        // --- FUNGSI RENDER ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.drawImage(images.bg, 0, 0); // Background statis
+
+            // Botol
+            bottles.forEach(b => {
+                let img = images.b_closed;
+                if (b.state === 'open') img = b.capacity > 0 ? images.b_open : images.b_empty;
+                ctx.drawImage(img, b.renderX, b.renderY); // Digambar dengan ukuran aslinya
+            });
+
+            // Labu
+            ctx.drawImage(getFlaskSprite(), flask.renderX, flask.renderY);
+
+            // Indikator
+            if (indicator.isDetached) {
+                ctx.drawImage(images.ppb, indicator.renderX, indicator.renderY); 
+                ctx.drawImage(images.ppp, indicator.cap_renderX, indicator.cap_renderY); 
+            } else {
+                ctx.drawImage(images.pppb, indicator.renderX, indicator.renderY); 
+            }
+
+            // Pipet
+            pipettes.forEach(p => {
+                let pImg = images['p' + p.capacity];
+                ctx.drawImage(pImg, p.renderX, p.renderY);
+            });
+
+            // UI Menu
+            ctx.drawImage(images.ui, 0, 0);
+
+            requestAnimationFrame(draw);
+        }
+
+        function getFlaskSprite() {
+            let total = flask.a + flask.b;
+            if (total === 0) return images.l;
+            if (!flask.hasIndicator) {
+                if (total === 1) return images.la; if (total === 2) return images.laa;
+                if (total === 3) return images.laaa; if (total === 4) return images.laaaa;
+            } else {
+                if (flask.a === flask.b) { 
+                    if (total === 2) return images.lab; if (total === 4) return images.laabb;
+                } else if (flask.a > flask.b) {
+                    if (total === 1) return images.la; if (total === 2) return images.laa;
+                    if (total === 3) return images.laaa; if (total === 4) return images.laaaa;
+                } else {
+                    if (total === 1) return images.lb; if (total === 2) return images.lbb;
+                    if (total === 3) return images.lbbb; if (total === 4) return images.lbbbb;
+                }
+            }
+            return images.l; 
+        }
+
+        // --- FUNGSI DETEKSI KOORDINAT (MOUSE & TOUCH/MOBILE) ---
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            let clientX = e.clientX, clientY = e.clientY;
+            
+            if(e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
+            }
+            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+        }
+
+        function showToast(msg) {
+            alertMsg.innerText = msg;
+            alertMsg.style.display = 'block';
+            setTimeout(() => { alertMsg.style.display = 'none'; }, 2000);
+        }
+
+        function checkOverlap(r1, r2) {
+            return (r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y);
+        }
+
+        // --- EVENT LISTENER (MOBILE & DESKTOP TERINTEGRASI) ---
+        function handleStart(e) {
+            if(e.cancelable) e.preventDefault();
+            const pos = getPos(e);
+            const mouseX = pos.x, mouseY = pos.y;
+
+            // UI Menu (Pojok kanan atas)
+            if (mouseX >= 232 && mouseX <= 252 && mouseY >= 4 && mouseY <= 22) {
+                document.getElementById('menu-overlay').style.display = 'flex'; return;
+            }
+
+            // Pipet
+            for (let i = pipettes.length - 1; i >= 0; i--) {
+                let p = pipettes[i];
+                let px = p.renderX + p.hx, py = p.renderY + p.hy;
+                if (mouseX >= px && mouseX <= px + p.hw && mouseY >= py && mouseY <= py + p.hh) {
+                    if (mouseY <= py + 35) { // Area Bulb 35px atas
+                        handlePipetteBulb(p); return;
+                    } else { 
+                        draggedObj = p; dragType = 'pipette';
+                        dragOffsetX = mouseX - p.renderX; dragOffsetY = mouseY - p.renderY; return;
+                    }
+                }
+            }
+
+            // Indikator (Tarik Tutup)
+            let capRX = indicator.isDetached ? indicator.cap_renderX : indicator.renderX;
+            let capRY = indicator.isDetached ? indicator.cap_renderY : indicator.renderY;
+            let capX = capRX + indicator.cap_hx, capY = capRY + indicator.cap_hy;
+            
+            if (mouseX >= capX && mouseX <= capX + indicator.cap_hw && mouseY >= capY && mouseY <= capY + indicator.cap_hh) {
+                if (indicator.location === 'flask' && mouseY <= capY + 15) {
+                    flask.hasIndicator = true; showToast("Indikator PP diteteskan!");
+                } else {
+                    indicator.isDetached = true; draggedObj = indicator; dragType = 'indicator';
+                    dragOffsetX = mouseX - indicator.cap_renderX; dragOffsetY = mouseY - indicator.cap_renderY;
+                } return;
+            }
+
+            // Botol (Buka/Tutup)
+            bottles.forEach(b => {
+                let bx = b.renderX + b.hx, by = b.renderY + b.hy;
+                if (mouseX >= bx && mouseX <= bx + b.hw && mouseY >= by && mouseY <= by + b.hh) {
+                    b.state = (b.state === 'closed') ? 'open' : 'closed';
+                }
+            });
+        }
+
+        function handleMove(e) {
+            if (!draggedObj) return;
+            if(e.cancelable) e.preventDefault();
+            const pos = getPos(e);
+            if (dragType === 'pipette') {
+                draggedObj.renderX = pos.x - dragOffsetX;
+                draggedObj.renderY = pos.y - dragOffsetY;
+            } else if (dragType === 'indicator') {
+                draggedObj.cap_renderX = pos.x - dragOffsetX;
+                draggedObj.cap_renderY = pos.y - dragOffsetY;
+            }
+        }
+
+        function handleEnd(e) {
+            if (!draggedObj) return;
+            if(e.cancelable) e.preventDefault();
+            let droppedOnTarget = false;
+
+            if (dragType === 'pipette') {
+                let p = draggedObj;
+                let pHit = { x: p.renderX + p.hx, y: p.renderY + p.hy, w: p.hw, h: p.hh };
+
+                for (let b of bottles) {
+                    let bHit = { x: b.renderX + b.hx, y: b.renderY + b.hy, w: b.hw, h: b.hh };
+                    if (checkOverlap(pHit, bHit)) {
+                        if (p.tag === 'netral' || p.tag === b.id) {
+                            p.renderX = bHit.x + 8 - p.hx; p.renderY = bHit.y - 45 - p.hy; 
+                            p.location = b.id; droppedOnTarget = true; break;
+                        }
+                    }
+                }
+                
+                let fHit = { x: flask.renderX + flask.hx, y: flask.renderY + flask.hy, w: flask.hw, h: flask.hh };
+                if (!droppedOnTarget && checkOverlap(pHit, fHit)) {
+                    p.renderX = fHit.x + 10 - p.hx; p.renderY = fHit.y - 50 - p.hy; 
+                    p.location = 'flask'; droppedOnTarget = true;
+                }
+
+                if (!droppedOnTarget) {
+                    if (p.capacity > 0) { p.capacity = 0; showToast("Cairan tumpah ke meja!"); }
+                    p.renderX = p.base_x; p.renderY = p.base_y; p.location = 'rack';
+                }
+            } 
+            else if (dragType === 'indicator') {
+                let ind = draggedObj;
+                let capHit = { x: ind.cap_renderX + ind.cap_hx, y: ind.cap_renderY + ind.cap_hy, w: ind.cap_hw, h: ind.cap_hh };
+                let fHit = { x: flask.renderX + flask.hx, y: flask.renderY + flask.hy, w: flask.hw, h: flask.hh };
+                
+                if (checkOverlap(capHit, fHit)) {
+                    ind.cap_renderX = fHit.x + 6 - ind.cap_hx; ind.cap_renderY = fHit.y - 25 - ind.cap_hy;
+                    ind.location = 'flask';
+                } else {
+                    ind.isDetached = false;
+                    ind.cap_renderX = ind.renderX; ind.cap_renderY = ind.renderY;
+                    ind.location = 'base';
+                }
+            }
+            draggedObj = null; dragType = null;
+        }
+
+        function handlePipetteBulb(p) {
+            let bottle = bottles.find(b => b.id === p.location);
+            if (bottle) {
+                if (bottle.state !== 'open') return; 
+                if (bottle.capacity > 0 && p.capacity < 5) {
+                    p.capacity++; bottle.capacity--; p.tag = bottle.id; 
+                }
+            } else if (p.location === 'flask') {
+                if (p.capacity > 1) { 
+                    let totalFlask = flask.a + flask.b;
+                    if (totalFlask >= 4) {
+                        document.getElementById('overfill-overlay').style.display = 'flex'; return;
+                    }
+                    p.capacity--;
+                    if (p.tag === 'A') flask.a++; else if (p.tag === 'B') flask.b++;
+                }
+            }
+        }
+
+        // Register Mouse Events
+        canvas.addEventListener('mousedown', handleStart);
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('mouseup', handleEnd);
+        canvas.addEventListener('mouseleave', handleEnd);
+
+        // Register Touch Events (Mobile)
+        canvas.addEventListener('touchstart', handleStart, {passive: false});
+        canvas.addEventListener('touchmove', handleMove, {passive: false});
+        canvas.addEventListener('touchend', handleEnd, {passive: false});
+
+        // Tombol Pop-up
+        document.getElementById('btn-lanjut').addEventListener('click', () => { document.getElementById('menu-overlay').style.display = 'none'; });
+        document.getElementById('btn-keluar').addEventListener('click', () => { alert("Keluar dari simulasi..."); });
+        document.getElementById('btn-ulangi').addEventListener('click', () => { initGame(); document.getElementById('overfill-overlay').style.display = 'none'; });
+
+    </script>
+</body>
+</html>
