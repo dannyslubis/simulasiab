@@ -39,31 +39,21 @@
         .menu-btn:hover { background-color: #a0a0a0; }
         .menu-btn:active { transform: scale(0.95); }
 
-        /* Popup Game Over / Overfill */
         #overfill-popup {
-            position: relative;
-            display: flex; flex-direction: column; align-items: center;
+            position: relative; display: flex; flex-direction: column; align-items: center;
         }
         #overfill-img {
-            width: 60%; /* Sesuaikan skala gambar popup di layar */
-            min-width: 300px;
-            image-rendering: pixelated;
+            width: 60%; min-width: 300px; image-rendering: pixelated;
         }
         #btn-ulangi {
-            position: absolute;
-            bottom: 12%; /* Posisi relatif terhadap gambar popup */
-            width: 45%;
-            height: 25%;
-            opacity: 0; /* Tombol transparan yang melapisi gambar asli */
-            cursor: pointer;
+            position: absolute; bottom: 12%; width: 45%; height: 25%;
+            opacity: 0; cursor: pointer;
         }
-
         #alert-msg {
             position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%);
             background: rgba(255,50,50,0.9); color: white; padding: 5px 15px;
             border-radius: 5px; font-size: 0.8rem; display: none; pointer-events: none; z-index: 5;
         }
-        
         #loading-text {
             position: absolute; color: white; font-size: 1.5rem; 
             top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -102,12 +92,9 @@
             bg: 'kanvasmeja.png', ui: 'tombolmenu.png', popupg: 'popupg.png',
             b_closed: 'bit.png', b_open: 'bib.png', b_empty: 'bkb.png',
             p0: 'pv0.png', p1: 'pv1.png', p2: 'pv2.png', p3: 'pv3.png', p4: 'pv4.png', p5: 'pv5.png',
-            // Labu & Variasi Isinya
-            l: 'l.png', 
-            la: 'la.png', laa: 'laa.png', laaa: 'laaa.png', laaaa: 'laaaa.png',
+            l: 'l.png', la: 'la.png', laa: 'laa.png', laaa: 'laaa.png', laaaa: 'laaaa.png',
             lb: 'lb.png', lbb: 'lbb.png', lbbb: 'lbbb.png', lbbbb: 'lbbbb.png',
             lab: 'lab.png', laabb: 'laabb.png',
-            // Indikator
             ppb: 'ppb.png', ppp: 'ppp.png', pppb: 'pppb.png'
         };
 
@@ -122,135 +109,132 @@
                 loadingText.innerText = `Memuat Aset... ${Math.floor((loadedImages/totalImages)*100)}%`;
                 if (loadedImages === totalImages) {
                     loadingText.style.display = 'none';
-                    draw(); // Mulai loop render
+                    draw(); 
                 }
             };
         }
 
-        // --- STATE GAME & OBJEK ---
-        const btnUI = { menu: { x: 236, y: 4, w: 16, h: 16 } };
+        // --- STATE & UKURAN LOGIS (HITBOX & RENDER) ---
+        // UI Menu (Lebar 16, Tinggi 32 untuk mengakomodasi 2 ikon atas bawah)
+        const uiBtn = { x: 232, y: 4, w: 18, h: 36, menu_hitbox_h: 18 }; 
 
         let bottles, pipettes, flask, indicator;
 
         function initGame() {
-            // Setup Botol
+            // Posisi disesuaikan dengan 'displayposisi.png'
             bottles = [
-                { id: 'A', x: 40, y: 70, w: 32, h: 50, state: 'closed', capacity: 5 }, // HCl
-                { id: 'B', x: 75, y: 70, w: 32, h: 50, state: 'closed', capacity: 5 }  // NaOH
+                { id: 'A', x: 45, y: 80, w: 35, h: 55, state: 'closed', capacity: 5 }, // HCl
+                { id: 'B', x: 85, y: 80, w: 35, h: 55, state: 'closed', capacity: 5 }  // NaOH
             ];
 
-            // Setup Labu Erlenmeyer
-            flask = { x: 130, y: 75, w: 36, h: 45, a: 0, b: 0, hasIndicator: false };
+            flask = { x: 135, y: 80, w: 40, h: 55, a: 0, b: 0, hasIndicator: false };
 
-            // Setup Indikator PP
             indicator = {
-                x: 185, y: 72, w: 24, h: 48, 
-                cap_x: 185, cap_y: 72, cap_w: 24, cap_h: 24,
-                isDetached: false, location: 'base' // 'base' atau 'flask'
+                x: 190, y: 78, w: 28, h: 57, 
+                cap_x: 190, cap_y: 78, cap_w: 28, cap_h: 28, // Tutup/Bulb PP
+                isDetached: false, location: 'base' 
             };
 
-            // Setup Pipet
             pipettes = [
-                { id: 1, x: 8, y: 15, base_x: 8, base_y: 15, w: 16, h: 96, capacity: 0, tag: 'netral', location: 'rack' },
-                { id: 2, x: 25, y: 15, base_x: 25, base_y: 15, w: 16, h: 96, capacity: 0, tag: 'netral', location: 'rack' }
+                { id: 1, x: 8, y: 15, base_x: 8, base_y: 15, w: 18, h: 120, capacity: 0, tag: 'netral', location: 'rack' },
+                { id: 2, x: 26, y: 15, base_x: 26, base_y: 15, w: 18, h: 120, capacity: 0, tag: 'netral', location: 'rack' }
             ];
         }
 
-        initGame(); // Panggil saat awal
+        initGame();
 
-        // Variabel Dragging
-        let draggedObj = null; // Bisa memegang 'pipette' atau 'indicatorCap'
+        let draggedObj = null; 
         let dragType = null;
         let dragOffsetX = 0, dragOffsetY = 0;
 
-        // --- FUNGSI RENDER UTAMA ---
+        // --- FUNGSI RENDER ---
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(images.bg, 0, 0);
+            
+            // 1. Gambar Background PAKSA penuh ke 256x144
+            ctx.drawImage(images.bg, 0, 0, canvas.width, canvas.height);
 
-            // 1. Gambar Botol Cairan
+            // 2. Gambar Botol PAKSA ke ukuran hitbox (w:35, h:55)
             bottles.forEach(b => {
                 let img = images.b_closed;
                 if (b.state === 'open') img = b.capacity > 0 ? images.b_open : images.b_empty;
-                ctx.drawImage(img, b.x, b.y);
+                ctx.drawImage(img, b.x, b.y, b.w, b.h);
             });
 
-            // 2. Gambar Labu & Logika Tampilan Visual (pH & Kapasitas)
-            ctx.drawImage(getFlaskSprite(), flask.x, flask.y);
+            // 3. Gambar Labu PAKSA ke ukuran hitbox (w:40, h:55)
+            ctx.drawImage(getFlaskSprite(), flask.x, flask.y, flask.w, flask.h);
 
-            // 3. Gambar Indikator PP
+            // 4. Gambar Indikator PAKSA ke ukuran hitbox
             if (indicator.isDetached) {
-                ctx.drawImage(images.ppb, indicator.x, indicator.y); // Botol bawah
-                ctx.drawImage(images.ppp, indicator.cap_x, indicator.cap_y); // Pipet ditarik
+                // Gambar botol PP bawah saja
+                ctx.drawImage(images.ppb, indicator.x, indicator.y, indicator.w, indicator.h); 
+                // Gambar tutup PP yang sedang ditarik
+                ctx.drawImage(images.ppp, indicator.cap_x, indicator.cap_y, indicator.cap_w, indicator.cap_h); 
             } else {
-                ctx.drawImage(images.pppb, indicator.x, indicator.y); // Utuh
+                ctx.drawImage(images.pppb, indicator.x, indicator.y, indicator.w, indicator.h); 
             }
 
-            // 4. Gambar Pipet Volumetrik
+            // 5. Gambar Pipet PAKSA ke ukuran hitbox (w:18, h:120)
             pipettes.forEach(p => {
                 let pImg = images['p' + p.capacity];
-                ctx.drawImage(pImg, p.x, p.y);
+                ctx.drawImage(pImg, p.x, p.y, p.w, p.h);
             });
 
-            // 5. Gambar UI Menu
-            ctx.drawImage(images.ui, 236, 4);
+            // 6. Gambar UI Tombol Menu PAKSA ke ukuran w:18, h:36
+            ctx.drawImage(images.ui, uiBtn.x, uiBtn.y, uiBtn.w, uiBtn.h);
 
             requestAnimationFrame(draw);
         }
 
-        // FUNGSI PENENTU SPRITE LABU SESUAI ATURAN PHASE 3
         function getFlaskSprite() {
             let total = flask.a + flask.b;
             if (total === 0) return images.l;
-
-            // Jika TIDAK ADA indikator, selalu tampilkan bening dominan A
             if (!flask.hasIndicator) {
                 if (total === 1) return images.la;
                 if (total === 2) return images.laa;
                 if (total === 3) return images.laaa;
                 if (total === 4) return images.laaaa;
-            } 
-            // Jika ADA indikator
-            else {
+            } else {
                 if (flask.a === flask.b) { 
-                    // NETRAL (Pink Pucat)
                     if (total === 2) return images.lab;
                     if (total === 4) return images.laabb;
                 } else if (flask.a > flask.b) {
-                    // ASAM (Bening)
                     if (total === 1) return images.la;
                     if (total === 2) return images.laa;
                     if (total === 3) return images.laaa;
                     if (total === 4) return images.laaaa;
                 } else {
-                    // BASA (Merah/Magenta Pekat)
                     if (total === 1) return images.lb;
                     if (total === 2) return images.lbb;
                     if (total === 3) return images.lbbb;
                     if (total === 4) return images.lbbbb;
                 }
             }
-            return images.l; // Fallback aman
+            return images.l; 
         }
 
-        // --- LOGIKA INTERAKSI MOUSE ---
+        // --- LOGIKA INTERAKSI MOUSE (FIXED) ---
         canvas.addEventListener('mousedown', function(e) {
             const rect = canvas.getBoundingClientRect();
+            // Kalkulasi skala yang lebih presisi
             const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-            // Cek UI Menu
-            if (mouseX >= btnUI.menu.x && mouseX <= btnUI.menu.x + btnUI.menu.w && mouseY >= btnUI.menu.y && mouseY <= btnUI.menu.y + btnUI.menu.h) {
+            // Cek Klik UI Menu (Hanya paruh atas gambar tombolmenu.png)
+            if (mouseX >= uiBtn.x && mouseX <= uiBtn.x + uiBtn.w && 
+                mouseY >= uiBtn.y && mouseY <= uiBtn.y + uiBtn.menu_hitbox_h) {
                 document.getElementById('menu-overlay').style.display = 'flex'; return;
             }
 
-            // Cek Interaksi Pipet Utama
+            // Cek Interaksi Pipet
             for (let i = pipettes.length - 1; i >= 0; i--) {
                 let p = pipettes[i];
                 if (mouseX >= p.x && mouseX <= p.x + p.w && mouseY >= p.y && mouseY <= p.y + p.h) {
-                    if (mouseY <= p.y + 25) { // Area Bulb
+                    // Area Bulb / Pencetan pipet (35 pixel teratas)
+                    if (mouseY <= p.y + 35) { 
                         handlePipetteBulb(p); return;
-                    } else { // Area Drag
+                    } else { 
+                        // Area Drag / Kaca
                         draggedObj = p; dragType = 'pipette';
                         dragOffsetX = mouseX - p.x; dragOffsetY = mouseY - p.y;
                         return;
@@ -258,18 +242,15 @@
                 }
             }
 
-            // Cek Interaksi Tutup Indikator (PPP)
+            // Cek Tutup Indikator PP
             let capX = indicator.isDetached ? indicator.cap_x : indicator.x;
             let capY = indicator.isDetached ? indicator.cap_y : indicator.y;
             
-            // Hitbox tutup indikator (Area atas botol PP)
             if (mouseX >= capX && mouseX <= capX + indicator.cap_w && mouseY >= capY && mouseY <= capY + indicator.cap_h) {
                 if (indicator.location === 'flask' && mouseY <= capY + 15) {
-                    // Teteskan indikator jika dipencet bulb-nya saat di atas labu
                     flask.hasIndicator = true;
-                    // Secara opsional bisa kasih alert visual kecil "Diteteskan!"
+                    console.log("Indikator diteteskan!");
                 } else {
-                    // Tarik / Drag tutup PP
                     indicator.isDetached = true;
                     draggedObj = indicator; dragType = 'indicator';
                     dragOffsetX = mouseX - indicator.cap_x; dragOffsetY = mouseY - indicator.cap_y;
@@ -277,7 +258,7 @@
                 return;
             }
 
-            // Cek Botol (Buka Tutup)
+            // Cek Botol Buka/Tutup
             bottles.forEach(b => {
                 if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) {
                     b.state = (b.state === 'closed') ? 'open' : 'closed';
@@ -302,26 +283,22 @@
 
         canvas.addEventListener('mouseup', function(e) {
             if (!draggedObj) return;
-            
             let droppedOnTarget = false;
 
             if (dragType === 'pipette') {
                 let p = draggedObj;
-                // Cek Jatuh ke Botol
                 for (let b of bottles) {
                     if (checkOverlap(p, b)) {
                         if (p.tag === 'netral' || p.tag === b.id) {
-                            p.x = b.x + 8; p.y = b.y - 40; p.location = b.id;
+                            p.x = b.x + 8; p.y = b.y - 45; p.location = b.id;
                             droppedOnTarget = true; break;
                         }
                     }
                 }
-                // Cek Jatuh ke Labu
                 if (!droppedOnTarget && checkOverlap(p, flask)) {
-                    p.x = flask.x + 10; p.y = flask.y - 45; p.location = 'flask';
+                    p.x = flask.x + 10; p.y = flask.y - 50; p.location = 'flask';
                     droppedOnTarget = true;
                 }
-                // Jatuh Sembarangan
                 if (!droppedOnTarget) {
                     if (p.capacity > 0) { p.capacity = 0; showLeakAlert(); }
                     p.x = p.base_x; p.y = p.base_y; p.location = 'rack';
@@ -330,13 +307,10 @@
             else if (dragType === 'indicator') {
                 let ind = draggedObj;
                 let capRect = { x: ind.cap_x, y: ind.cap_y, w: ind.cap_w, h: ind.cap_h };
-                
-                // Cek Jatuh ke Labu
                 if (checkOverlap(capRect, flask)) {
-                    ind.cap_x = flask.x + 8; ind.cap_y = flask.y - 25;
+                    ind.cap_x = flask.x + 6; ind.cap_y = flask.y - 25;
                     ind.location = 'flask';
                 } else {
-                    // Kembali ke botol PP
                     ind.isDetached = false;
                     ind.cap_x = ind.x; ind.cap_y = ind.y;
                     ind.location = 'base';
@@ -346,7 +320,7 @@
             draggedObj = null; dragType = null;
         });
 
-        // --- FUNGSI UTILITAS & LOGIKA ---
+        // --- FUNGSI UTILITAS ---
         function checkOverlap(rect1, rect2) {
             return (rect1.x < rect2.x + rect2.w && rect1.x + rect1.w > rect2.x &&
                     rect1.y < rect2.y + rect2.h && rect1.y + rect1.h > rect2.y);
@@ -358,25 +332,21 @@
         }
 
         function handlePipetteBulb(p) {
-            // Jika di atas botol
             let bottle = bottles.find(b => b.id === p.location);
             if (bottle) {
                 if (bottle.state !== 'open') return; 
                 if (bottle.capacity > 0 && p.capacity < 5) {
                     p.capacity++; bottle.capacity--;
-                    p.tag = bottle.id; // Pipet terkunci ke A atau B
+                    p.tag = bottle.id; 
                 }
             }
-            // Jika di atas Labu
             else if (p.location === 'flask') {
-                if (p.capacity > 1) { // Harus menyisakan pv1
+                if (p.capacity > 1) { 
                     let totalFlask = flask.a + flask.b;
                     if (totalFlask >= 4) {
-                        // OVERFILL TRIGER
                         document.getElementById('overfill-overlay').style.display = 'flex';
                         return;
                     }
-
                     p.capacity--;
                     if (p.tag === 'A') flask.a++;
                     else if (p.tag === 'B') flask.b++;
@@ -384,18 +354,15 @@
             }
         }
 
-        // --- TOMBOL INTERAKSI HTML ---
+        // --- TOMBOL POPUP HTML ---
         document.getElementById('btn-lanjut').addEventListener('click', () => { 
             document.getElementById('menu-overlay').style.display = 'none'; 
         });
-        
         document.getElementById('btn-keluar').addEventListener('click', () => { 
             alert("Keluar dari simulasi..."); 
         });
-
-        // Tombol Reset di Layar Pop-up Overfill
         document.getElementById('btn-ulangi').addEventListener('click', () => {
-            initGame(); // Reset semua posisi dan kapasitas ke awal
+            initGame(); 
             document.getElementById('overfill-overlay').style.display = 'none';
         });
 
